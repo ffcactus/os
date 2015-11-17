@@ -1,2 +1,5 @@
 *.o
+*.iso
+boot/bootloader/iso/
+
 
