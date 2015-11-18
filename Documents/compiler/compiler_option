@@ -1,0 +1,47 @@
+The following information comes from wiki.osdev.org
+
+=============================================
+Options that you should pass to your Compiler
+=============================================
+
+You need to pass some special options to your compiler to tell it it isn't building user-space programs.
+
+-ffreestanding
+This is important as it lets the compiler know it is building a kernel rather than user-space problem. The documentation for GCC says you are required to implement the functions memset, memcpy, memcmp and memmove yourself in freestanding mode.
+
+-nostdlib (same as both -nostartfiles -nodefaultlibs)
+The -nostdlib option is the same as passing both the -nostartfiles -nodefaultlibs options. You don't want the start files (crt0.o, crti.o, crtn.o) in the kernel as they only used for user-space programs. You won't want the default libraries such as libc, because the user-space versions are not suitable for kernel use. You should only pass -nostdlib, as it is the same as passing the two latter options that you can then remove.
+
+-lgcc
+You disable the important libgcc library when you pass -nodefaultlibs (implied by -nostdlib). The compiler needs this library for many operations that it cannot do itself or that is more efficient to put into a shared function. You must pass this library near the end of the link line, after all the other object files and libraries, or the linker won't use it and you get strange linker errors.
+
+-mno-red-zone (x86_64 only)
+You need to pass this on x86_64 or interrupts will corrupt the stack. The red zone is a x86_64 ABI feature that means that signals happen 128 bytes further down the stack. Functions that use less than that amount of memory is allowed to not increment the stack pointer. This means that CPU interrupts in the kernel will corrupt the stack. Be sure to pass enable this for all x86_64 kernel code.
+
+-fno-exceptions, -fno-rtti (C++)
+It is wise to disabled C++ features that doesn't work out-of-the-box in kernels. You need to supply a C++ support library to the kernel (in addition to libgcc) to make all C++ features work. If you don't use these C++ features, it should be sufficient to pass these options.
+
+================================================
+Options that you shouldn't pass to your Compiler
+================================================
+
+There is a number of options you normally shouldn't pass to your cross-compler when building a kernel. Unfortunately, a lot of kernel tutorials suggest you use these. Please do not pass a option without understanding why it is needed and don't suggest to people that they use them. Often, these options are used by those that don't use cross-compilers to cover up other problems.
+
+-m32, -m64 (compiler)
+If you build a cross-compiler such as i686-elf-gcc, then you don't need to tell it to make a 32-bit executable. Likewise, you don't need to pass -m64 to x86_64-elf-gcc. This will make your Makefiles much simpler as you can simply select the correct compiler and things will work. You can use x86_64-elf-gcc to build a 32-bit kernel, but it's much easier to just build two cross-compilers and use them. In addition, using a cross-compiler for every CPU you target will make it easy to port third-party software without tricking it into passing -m32 as well.
+
+-melf_i386, -melf_x86_64 (linker)
+You don't need to pass these for the same reason as -m32 and -m64. Additionally, these options are for ld, and you shouldn't be invoking ld directly in the first place, but rather linking with your cross-compiler.
+
+-32, -64 (assembler)
+The cross-assembler (i686-elf-as) defaults to the platform you specified when building binutils, and so you don't need to repeat the choice here. You can use the cross-compiler as an assembler, but it is okay to call the assembler directly.
+
+-nostdinc
+You shouldn't pass this option as it disables the standard header include directories. However, you do want to use these headers as they contain many useful declarations. The cross-compiler comes with a bunch of useful headers such as stddef.h, stdint.h, stdarg.h, and more.
+If you don't use a cross-compiler, you get the headers for your host platform (such as Linux) which are unsuitable for your operating system. For that reason, most people that don't use a cross-compiler use this option and then have to reimplement stddef.h, stdint.h, stdarg.h and more themselves. People often implement those files incorrectly as you need compiler magic to implement features such as stdarg.h.
+
+-fno-builtin
+You shouldn't pass this option as it disables default compiler builtins. If the compiler sees a function called 'strlen', it normally assumes it is the C standard 'strlen' function and it is able to optimize the expression strlen("foo") into 3 at compile time, instead of calling the function. This option has value if you are creating some really non-standard environment in which common C functions don't have their usual semantics.
+
+-fno-stack-protector
+I have seen a lot of newbies pass this option. Upon closer examination, I see no reason to pass it, but I'm not entirely sure, perhaps it's because it requires libgcc? I'd leave the option out unless you actually need it. Please correct this description if you know more.
