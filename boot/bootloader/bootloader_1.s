@@ -26,7 +26,7 @@ loader:
 	movw %ax, %ss
 	movw $0x2000, %sp
 	sti			# enable interrupt.
-	mov log0, %si
+	movw log0, %si
 	call message
 	
 	cli
