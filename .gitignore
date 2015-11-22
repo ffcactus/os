@@ -1,6 +1,7 @@
 *.o
 *.iso
 *.img
+*.swp
 boot/bootloader/iso/
 
 
