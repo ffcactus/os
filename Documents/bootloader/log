@@ -1,0 +1,13 @@
+You can find lots of information and examples about the first stage bootloader. The first stage bootloader is the one in the first sector of a media that the BIOS will loader it to the address 0x07c0 and run it. But you may find that nearly none of them can actually work. When it runs into trouble, how can you solve it? The hardest part is to identify the problem. The problems may come from your assembly and link tools, the flags you specified in the building, the bootable media you built, and the simulation tools you use and so on. I suggest you to follow these steps to finish your first “Hello World” bootloader.
+
+	1. Find a bootable floppy to test your simulation tools. This bootable floppy can be DOS or grub bootable floppy. 
+
+	2. Select your build tools. You can select NASM as your tool, I found many bootloader examples are using NASM. Using NASM can avoid lots of building problems. However, if you are going to use GNU tools because you are going to use them in the future, hmmm, you’d better look at the Makefile in this project.
+
+	3. Verify your bootloader. You can write an “empty” bootloader at first, do nothing but just loop forever. The key is to verify if the BIOS can recognize your boot sector, the BIOS should not report “Not a bootable device”. You can use hex edit to see if 0x55aa is write at the address 0xfe.
+
+	4. Then you can try to display a single char to the screen, but using BIOS INT 0x10.
+
+	5. At this point, you improve your bootloader.
+
+
