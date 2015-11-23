@@ -45,12 +45,18 @@ cylinder_start:
 	call print
 .endm
 
+.macro DUMP begin, size
+	movw $\begin, %si
+	movw $\size, %cx
+	call dump
+.endm
+
 /**
  * Entry point
  */
 	.file "boot.S"
 	.text
-	.code16
+	.code16gcc
 	.org 0x0000
 .globl _start, start;
 _start:
@@ -69,11 +75,14 @@ after_BPB:
         movw %ax, %es
 	#movw $BOOTLOADER_ADDR, %sp	# stack grows down to 0x0000
 	PRINT message0
+	DUMP hexdump, 1
 done:
 	jmp done
 message0:
         .ascii  "Booting ..."
         .byte 0
+hexdump:
+	.byte 0xa5
 
 /**
  * Write the string pointed to by %si
@@ -83,18 +92,49 @@ message0:
  * AL = Character to write.
  * BH = Page Number (Should be 0)
  * BL = Foreground color (Graphics Modes Only)
- * When using the function, put the string address to si. The string
+ * When using the function, put the string address to SI. The string
  * should end with 0.
  */
 1:
-	# movw $0x0001, %bx
+	movw $0x0001, %bx
 	movb $0xe, %ah
 	int $0x10
 print:
-        lodsb   # Loads a byte pointed by SI into the AL register
+        lodsb   # Loads a byte pointed by SI into AL.
         cmpb $0, %al 
         jne 1b
         ret
+	
+/**
+ * Dump a area of data.
+ * Display 8 bytes of code each line. For every 10 line will wait for any key to continue.
+ * SI = The start address
+ * CX = The size of area to dump
+ */
+1:
+	pop %dx
+	ret
+dump:
+	movw $0x0001, %bx	# Page number = 0, froeground color = 1.
+	push %dx		# DL = row counter, DH = column counter.
+	movw $0x0001, %bx
+	movb $10, %dl
+	movb $8, %dh
+	cld
+2:
+	cmpw $0, %cx
+	je 1b
+	lodsb		# loads the byte pointed by SI into AL.
+	div $0x0f	# AL is the quotient, and AH is the remainder.
+	push %ax	# save the result.
+	movb $0xe, %ah
+	int $0x10
+	pop %ax
+	movb %ah, %al
+	movb $0xe, %ah
+	int $0x10
+	dec %cx
+	jmp 2b
 	
 	.fill 0x1fe - (. - _start) ,1,0
 	.org _start + BOOT_MACHINE_PART_END

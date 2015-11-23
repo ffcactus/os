@@ -2,6 +2,7 @@
 *.iso
 *.img
 *.swp
+*.dump
 boot/bootloader/iso/
 
 
