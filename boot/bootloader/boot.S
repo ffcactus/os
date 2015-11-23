@@ -75,14 +75,14 @@ after_BPB:
         movw %ax, %es
 	#movw $BOOTLOADER_ADDR, %sp	# stack grows down to 0x0000
 	PRINT message0
-	DUMP hexdump, 1
+	DUMP hexdump, 5
 done:
 	jmp done
 message0:
         .ascii  "Booting ..."
         .byte 0
 hexdump:
-	.byte 0xa5
+	.byte 0x00, 0x01, 0x10, 0xaa, 0xff
 
 /**
  * Write the string pointed to by %si
@@ -111,28 +111,42 @@ print:
  * SI = The start address
  * CX = The size of area to dump
  */
+index:
+.byte '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'
 1:
 	pop %dx
 	ret
 dump:
-	movw $0x0001, %bx	# Page number = 0, froeground color = 1.
 	push %dx		# DL = row counter, DH = column counter.
-	movw $0x0001, %bx
 	movb $10, %dl
 	movb $8, %dh
 	cld
 2:
 	cmpw $0, %cx
 	je 1b
-	lodsb		# loads the byte pointed by SI into AL.
-	div $0x0f	# AL is the quotient, and AH is the remainder.
-	push %ax	# save the result.
+	lodsb			# loads the byte pointed by SI into AL.
+	push %si		# SI need to be used as index.
+	push %ax	
+	sar $4, %al		# show first 4 bits.  
+	movw $index, %si
+	addw %ax, %si
+	movb (%si), %al
 	movb $0xe, %ah
+	movw $0x0001, %bx	# Page number = 0, froeground color = 1.
 	int $0x10
 	pop %ax
-	movb %ah, %al
+	andw $0x000f, %ax 	# show last 4 bits.
+	movw $index, %si
+	addw %ax, %si
+	movb (%si), %al
 	movb $0xe, %ah
+	movw $0x0001, %bx
 	int $0x10
+	movb $'#', %al		# display a space
+	movb $0xe, %ah
+	movw $0x0001, %bx
+	int $0x10
+	pop %si
 	dec %cx
 	jmp 2b
 	
