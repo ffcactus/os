@@ -41,8 +41,14 @@ cylinder_start:
 .endm	
 
 .macro PRINT str
+	push %si
+	push %ax
+	push %bx
 	movw $\str, %si
 	call print
+	pop %bx
+	pop %ax
+	pop %si
 .endm
 
 .macro DUMP begin, size
@@ -73,16 +79,16 @@ after_BPB:
         movw $BOOTLOADER_ADDR, %ax	# set address expression
         movw %ax, %ds
         movw %ax, %es
-	#movw $BOOTLOADER_ADDR, %sp	# stack grows down to 0x0000
+	movw $BOOTLOADER_ADDR, %sp	# stack grows down to 0x0000
 	PRINT message0
-	DUMP hexdump, 1
+	DUMP hexdump, 15
 done:
 	jmp done
 message0:
-        .ascii  "Booting ..."
-        .byte 0
+        .asciz  "Booting ...\r\n"
 hexdump:
-	.byte 0xa5
+	.byte 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
+	.byte 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
 
 /**
  * Write the string pointed to by %si
@@ -111,29 +117,49 @@ print:
  * SI = The start address
  * CX = The size of area to dump
  */
+index:
+.byte '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'
+.byte 'A', 'B', 'C', 'D', 'E', 'F'
+enter_key:
+.asciz "\r\n"
 1:
 	pop %dx
 	ret
 dump:
-	movw $0x0001, %bx	# Page number = 0, froeground color = 1.
 	push %dx		# DL = row counter, DH = column counter.
-	movw $0x0001, %bx
 	movb $10, %dl
 	movb $8, %dh
 	cld
 2:
 	cmpw $0, %cx
 	je 1b
-	lodsb		# loads the byte pointed by SI into AL.
-	div $0x0f	# AL is the quotient, and AH is the remainder.
-	push %ax	# save the result.
+	xorw %ax, %ax		# clean the AX at first.
+	lodsb			# loads the byte pointed by SI into AL.
+	push %ax		# because AH will be used, so we save AX.
+	shr $4, %ax		# show first 4 bits.  
+	movw $index, %di
+	addw %ax, %di
+	movb (%di), %al
 	movb $0xe, %ah
+	movw $0x0001, %bx	# Page number = 0, froeground color = 1.
 	int $0x10
 	pop %ax
-	movb %ah, %al
+	andw $0x000f, %ax 	# show last 4 bits.
+	movw $index, %di
+	addw %ax, %di
+	movb (%di), %al
 	movb $0xe, %ah
+	movw $0x0001, %bx
+	int $0x10
+	movb $' ', %al		# display a space
+	movb $0xe, %ah
+	movw $0x0001, %bx
 	int $0x10
 	dec %cx
+	dec %dh 
+	jnz 2b
+	PRINT enter_key	
+	movb $8,%dh
 	jmp 2b
 	
 	.fill 0x1fe - (. - _start) ,1,0

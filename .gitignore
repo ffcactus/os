@@ -3,6 +3,8 @@
 *.img
 *.swp
 *.dump
+*.bin
+*.flp
 boot/bootloader/iso/
 
 
