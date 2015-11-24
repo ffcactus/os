@@ -14,3 +14,6 @@ cd: all
 		-o ./boot.iso ./iso
 	qemu-system-i386 -cdrom boot.iso
 
+clean:
+	@rm -rf iso boot.o boot.bin floppy.flp boot.iso
+

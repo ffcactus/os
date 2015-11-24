@@ -41,14 +41,10 @@ cylinder_start:
 .endm	
 
 .macro PRINT str
-	push %si
-	push %ax
-	push %bx
+	pusha
 	movw $\str, %si
 	call print
-	pop %bx
-	pop %ax
-	pop %si
+	popa
 .endm
 
 .macro DUMP begin, size
@@ -62,7 +58,7 @@ cylinder_start:
  */
 	.file "boot.S"
 	.text
-	.code16gcc
+	.code16
 	.org 0x0000
 .globl _start, start;
 _start:
@@ -79,9 +75,9 @@ after_BPB:
         movw $BOOTLOADER_ADDR, %ax	# set address expression
         movw %ax, %ds
         movw %ax, %es
-	movw $BOOTLOADER_ADDR, %sp	# stack grows down to 0x0000
+	# movw $BOOTLOADER_ADDR, %sp	# stack grows down to 0x0000
 	PRINT message0
-	DUMP hexdump, 15
+	DUMP hexdump, 16
 done:
 	jmp done
 message0:
@@ -123,11 +119,9 @@ index:
 enter_key:
 .asciz "\r\n"
 1:
-	pop %dx
 	ret
 dump:
-	push %dx		# DL = row counter, DH = column counter.
-	movb $10, %dl
+	movb $10, %dl		# DL = row counter, DH = column counter.
 	movb $8, %dh
 	cld
 2:
