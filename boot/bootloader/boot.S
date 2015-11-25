@@ -53,6 +53,28 @@ cylinder_start:
 	call dump
 .endm
 
+.macro RESET_DISK drive
+	pusha
+	movb $\drive, %dl
+	movw 0x0, %ah
+	call reset_disk
+	popa
+.endm
+
+.macro READ_SECTORS drive, head, cylinder, sector, count, destination
+	pusha
+	movw $\destination, %ax
+	movw %ax, %es
+	xorw %bx, %bx
+	movb $\drive, %dl
+	movb $\head, %dh
+	movb $\cylinder, %ch
+	movb $\sector, %cl
+	movb $\count, %al
+	call read_sectors
+	popa
+.endm
+
 /**
  * Entry point
  */
@@ -76,14 +98,35 @@ after_BPB:
         movw %ax, %ds
         movw %ax, %es
 	# movw $BOOTLOADER_ADDR, %sp	# stack grows down to 0x0000
-	PRINT message0
-	DUMP hexdump, 16
-done:
-	jmp done
-message0:
-        .asciz  "Booting ...\r\n"
+	PRINT message_booting
+
+# We need make sure the BIOS supports the INT 13 extensions.
+int13_ext_check:
+	mov $0x41, %ah
+	mov $0x55aa, %bx
+	# DL should contain the drive value.
+	int $0x13
+        jc int13_ext_check_failed     
+        cmpw $0xaa55, %bx
+        jne int13_ext_check_failed
+	jmp read_cd_content
+int13_ext_check_failed:
+	PRINT message_no_int13_ext
+	jmp loop
+read_cd_content:
+	PRINT message_loading_img
+	jmp loop	
+loop:
+	cli
+	hlt
+	jmp loop
+message_booting:
+        .asciz "Booting ...\r\n"
+message_no_int13_ext:
+	.asciz "No INT13 extension. Boot failed."
+message_loading_img:
+	.asciz "Loading OS image."
 hexdump:
-	.byte 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
 	.byte 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
 
 /**
@@ -106,7 +149,12 @@ print:
         cmpb $0, %al 
         jne 1b
         ret
-	
+
+/**
+ * Print the register's value.
+ * 
+print_reg:
+		
 /**
  * Dump a area of data.
  * Display 8 bytes of code each line. For every 10 line will wait for any key to continue.
@@ -155,7 +203,41 @@ dump:
 	PRINT enter_key	
 	movb $8,%dh
 	jmp 2b
-	
+
+/**
+ * Reset the disk controller, let it go to the first sector.
+ * BIOS INT 0x13
+ * AH = 0x00
+ * DL = Drive to reset.
+ * Return:
+ * AH = Status code.
+ * CF = Clear if success, set if failure.
+ */	
+reset_disk:
+	int $0x13
+	jc reset_disk
+	ret
+
+/**
+ * Read sectors into memory
+ * BIOS INT 0x13
+ * AH = 0x02
+ * AL = Numbers of sectors to read.
+ * CH = Low eight bits of cylinder number.
+ * CL = Sector Number Bits 0-5. Bits 6-7 are for hard disks only.
+ * DH = Head number.
+ * DL = Drive number (Bit 7 set for hard disk)
+ * ES:BX = Buffer to read sector to
+ * Return
+ * AH = Status code
+ * AL = Number of sectors read
+ * CF = Set if failure, cleaned if successful.
+ */
+read_sectors:
+	int $0x13
+	jc read_sectors
+	ret
+
 	.fill 0x1fe - (. - _start) ,1,0
 	.org _start + BOOT_MACHINE_PART_END
 	.word BOOT_MACHINE_SIGNATURE
