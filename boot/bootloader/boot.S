@@ -20,25 +20,9 @@
 # The offset of the end of the partition table.
 .equ BOOT_MACHINE_PART_END, 0x1fe
 
-
-
-.macro scratch
-mode:
-	.byte 0
-disk_address_packet:
-sectors:
-	.long 0
-heads:
-	.long 0
-cylinders:
-	.word 0
-sector_start:
-	.byte 0
-head_start:
-	.byte 0
-cylinder_start:
-	.word 0
-.endm	
+/* The segment of disk buffer. The disk buffer MUST be 32K long and
+   cannot straddle a 64K boundary.  */
+.equ BOOT_MACHINE_BUFFER_SEG, 0x7000
 
 .macro PRINT str
 	pusha
@@ -90,7 +74,14 @@ start:
 	nop
 	. = _start + BOOT_MACHINE_BPB_START
 	. = _start + 4
-	scratch
+disk_addr_packet:
+	.byte 0x10		# (00h) size of packet
+	.byte 0x00		# (01h) reserved
+	.word 0x0001			# (02h) number of blocks to transfer
+	.word 0x0000, 0x8000	# (04h) DWORD, transfer buffer
+	.word 0x0000, 0x0000	# (08h) QWORD, starting absolute block number
+	.word 0x0000, 0x0020	
+				# (10h)
 	. = _start + BOOT_MACHINE_BPB_END
 after_BPB:
 	cli				# disable interrupt.
@@ -109,23 +100,50 @@ int13_ext_check:
         jc int13_ext_check_failed     
         cmpw $0xaa55, %bx
         jne int13_ext_check_failed
+	andw $0x001, %cx	# if function 42h-44h,47h,48h are supported
+	jz int13_ext_check_failed
 	jmp read_cd_content
+
 int13_ext_check_failed:
 	PRINT message_no_int13_ext
 	jmp loop
+
 read_cd_content:
+
+	DUMP BOOT_MACHINE_PART_END, 16
+	jmp loop
+	# CHS mode : Cylinder-Head-Sector mode.
+	# LBA mode : Logical Block Addressing mode.
+	# When we use INT 13 extension, we use LBA mode in which
+	# the device is taken as a single large device.
+
 	PRINT message_loading_img
-	jmp loop	
+	movw $disk_addr_packet, %si
+	movb $0x42, %ah
+	int $0x13
+	jc error_read_sectors	
+	
+	DUMP 2488, 16
+	jmp loop
+
+error_read_sectors:
+	PRINT message_sector_read_err
+	jmp loop
 loop:
+	PRINT message_halt
 	cli
 	hlt
 	jmp loop
 message_booting:
         .asciz "Booting ...\r\n"
+message_halt:
+	.asciz "Boot Halt.\r\n"
 message_no_int13_ext:
-	.asciz "No INT13 extension. Boot failed."
+	.asciz "No INT13 extension. Boot failed.\r\n"
 message_loading_img:
-	.asciz "Loading OS image."
+	.asciz "Loading OS image.\r\n"
+message_sector_read_err:
+	.asciz "Sector read error.\r\n"
 hexdump:
 	.byte 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
 
