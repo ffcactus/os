@@ -77,10 +77,10 @@ start:
 disk_addr_packet:
 	.byte 0x10		# (00h) size of packet
 	.byte 0x00		# (01h) reserved
-	.word 0x0001			# (02h) number of blocks to transfer
-	.word 0x0000, 0x8000	# (04h) DWORD, transfer buffer
-	.word 0x0000, 0x0000	# (08h) QWORD, starting absolute block number
-	.word 0x0000, 0x0020	
+	.word 0x0001		# (02h) number of blocks to transfer
+	.word 0x8000, 0x0000	# (04h) DWORD, transfer buffer
+	.word 0x0010, 0x0000	# (08h) QWORD, starting absolute block number
+	.word 0x0000, 0x0000	
 				# (10h)
 	. = _start + BOOT_MACHINE_BPB_END
 after_BPB:
@@ -95,7 +95,8 @@ after_BPB:
 int13_ext_check:
 	mov $0x41, %ah
 	mov $0x55aa, %bx
-	# DL should contain the drive value.
+	# DL should contain the drive value. But we'd better save it.
+	push %dx
 	int $0x13
         jc int13_ext_check_failed     
         cmpw $0xaa55, %bx
@@ -110,20 +111,19 @@ int13_ext_check_failed:
 
 read_cd_content:
 
-	DUMP BOOT_MACHINE_PART_END, 16
-	jmp loop
 	# CHS mode : Cylinder-Head-Sector mode.
 	# LBA mode : Logical Block Addressing mode.
 	# When we use INT 13 extension, we use LBA mode in which
 	# the device is taken as a single large device.
 
 	PRINT message_loading_img
+	pop %dx
 	movw $disk_addr_packet, %si
 	movb $0x42, %ah
 	int $0x13
 	jc error_read_sectors	
 	
-	DUMP 2488, 16
+	DUMP 0x0400, 16
 	jmp loop
 
 error_read_sectors:
