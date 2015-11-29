@@ -3,30 +3,26 @@
  * stage bootloader.
  */
 
-// The address of this bootloader been loaded by BIOS
+
+
+# The address of this bootloader been loaded by BIOS
 .equ BOOTLOADER_ADDR, 0x07c0
 
-// The signature for bootloader.
-.equ BOOT_SIGNATURE, 0xaa55
+# The signature for bootloader.
+.equ BOOT_MACHINE_SIGNATURE, 0xaa55
 
-// The offset of the start of BPB (BIOS Parameter Block).
-.equ BOOT_BPB_START, 0x03	
+# The offset of the start of BPB (BIOS Parameter Block).
+.equ BOOT_MACHINE_BPB_START, 0x03	
 
-// The offset of the end of BPB (BIOS Parameter Block).
-.equ BOOT_BPB_END, 0x5a
+# The offset of the end of BPB (BIOS Parameter Block).
+.equ BOOT_MACHINE_BPB_END, 0x5a
 
-// The offset of the end of the partition table.
-.equ BOOT_PART_END, 0x1fe
-
-/* The stack segment.  */
-.equ BOOT_STACK_SEG, 0x2000
-
-// The offset of drive check
-.equ BOOT_MACHINE_DRIVE_CHECK, 0x66
+# The offset of the end of the partition table.
+.equ BOOT_MACHINE_PART_END, 0x1fe
 
 /* The segment of disk buffer. The disk buffer MUST be 32K long and
    cannot straddle a 64K boundary.  */
-.equ BOOT_BUFFER_SEG, 0x7000
+.equ BOOT_MACHINE_BUFFER_SEG, 0x7000
 
 .macro PRINT str
 	pusha
@@ -69,71 +65,42 @@
 	.file "boot.S"
 	.text
 	.code16
+	.org 0x0000
 .globl _start, start;
-
-/**
- * The _start is loaded at 0x7c00 by BIOS. And BIOS will jump to it
- * with CS:IP 0:7c00
- */
 _start:
 start:
-// The offset 0x0000 must be a jump to the reset of code.
+# The offset 0x0000 must be a jump to the reset of code.
 	jmp after_BPB
 	nop
-
-// The offset 0x0003 is the start of BPB.
-	. = _start + BOOT_BPB_START
+	. = _start + BOOT_MACHINE_BPB_START
 	. = _start + 4
 disk_addr_packet:
-	.byte 0x10		// (00h) size of packet
-	.byte 0x00		// (01h) reserved
-	.word 0x0001		// (02h) number of blocks to transfer
-	.word 0x7e00, 0x0000	// (04h) DWORD, transfer buffer
-	.word 0x0010, 0x0000	// (08h) QWORD, starting absolute block number
-	.word 0x0000, 0x0000	
-
-// The offset 0x00a5 is the end of BPB.	
-	. = _start + BOOT_BPB_END
+	.byte 0x10		# (00h) size of packet
+	.byte 0x00		# (01h) reserved
+	.word 0x0001			# (02h) number of blocks to transfer
+	.word 0x0000, 0x8000	# (04h) DWORD, transfer buffer
+	.word 0x0000, 0x0000	# (08h) QWORD, starting absolute block number
+	.word 0x0000, 0x0020	
+				# (10h)
+	. = _start + BOOT_MACHINE_BPB_END
 after_BPB:
-	// We need do drive check, but we skip it right now...
-        . = _start + BOOT_MACHINE_DRIVE_CHECK
-boot_drive_check:
-        jmp 3f      /* grub-setup may overwrite this jump */
-        testb $0x80, %dl
-        jz 2f
-3:
-        /* Ignore %dl different from 0-0x0f and 0x80-0x8f.  */
-        testb $0x70, %dl
-        jz 1f
-2:
-        movb $0x80, %dl
-1:
-        /*
-         * ljmp to the next instruction because some bogus BIOSes
-         * jump to 07C0:0000 instead of 0000:7C00.
-         */
-#	ljmp $0, $real_start
-	jmp real_start
-real_start:
-	cli				
-	// Set up DS and SS.
-        xorw %ax, %ax
+	cli				# disable interrupt.
+        movw $BOOTLOADER_ADDR, %ax	# set address expression
         movw %ax, %ds
-        movw %ax, %ss
-#	movw $BOOT_STACK_SEG, %sp	// stack grows down to 0x0000
-	sti
+        movw %ax, %es
+	# movw $BOOTLOADER_ADDR, %sp	# stack grows down to 0x0000
 	PRINT message_booting
 
-// We need make sure the BIOS supports the INT 13 extensions.
+# We need make sure the BIOS supports the INT 13 extensions.
 int13_ext_check:
 	mov $0x41, %ah
 	mov $0x55aa, %bx
-	// DL should contain the drive value.
+	# DL should contain the drive value.
 	int $0x13
         jc int13_ext_check_failed     
         cmpw $0xaa55, %bx
         jne int13_ext_check_failed
-	andw $0x001, %cx	// if function 42h-44h,47h,48h are supported
+	andw $0x001, %cx	# if function 42h-44h,47h,48h are supported
 	jz int13_ext_check_failed
 	jmp read_cd_content
 
@@ -143,6 +110,8 @@ int13_ext_check_failed:
 
 read_cd_content:
 
+	DUMP BOOT_MACHINE_PART_END, 16
+	jmp loop
 	# CHS mode : Cylinder-Head-Sector mode.
 	# LBA mode : Logical Block Addressing mode.
 	# When we use INT 13 extension, we use LBA mode in which
@@ -150,12 +119,11 @@ read_cd_content:
 
 	PRINT message_loading_img
 	movw $disk_addr_packet, %si
-	
 	movb $0x42, %ah
 	int $0x13
 	jc error_read_sectors	
 	
-	DUMP 0x7e00, 16
+	DUMP 2488, 16
 	jmp loop
 
 error_read_sectors:
@@ -288,7 +256,6 @@ read_sectors:
 	jc read_sectors
 	ret
 
-// The end of boot sector.
-	.fill BOOT_PART_END - (. - _start) ,1,0
-	. =  _start + BOOT_PART_END
-	.word BOOT_SIGNATURE
+	.fill 0x1fe - (. - _start) ,1,0
+	.org _start + BOOT_MACHINE_PART_END
+	.word BOOT_MACHINE_SIGNATURE
