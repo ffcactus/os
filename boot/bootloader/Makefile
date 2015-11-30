@@ -14,7 +14,7 @@ cd: all
 		-b boot/loader.sys -no-emul-boot -boot-load-size 4 \
 		-input-charset utf-8 \
 		-o ./boot.iso ./iso
-	qemu-system-i386 -cdrom boot.iso
+	qemu-system-i386 -cdrom boot.iso &
 
 clean:
 	@rm -rf iso boot.o boot.bin floppy.flp boot.iso

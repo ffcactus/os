@@ -24,6 +24,7 @@
    cannot straddle a 64K boundary.  */
 .equ BOOT_MACHINE_BUFFER_SEG, 0x7000
 
+# Print a string.
 .macro PRINT str
 	pusha
 	movw $\str, %si
@@ -31,20 +32,35 @@
 	popa
 .endm
 
+# Print a area of data in hex format.
 .macro DUMP begin, size
-	movw $\begin, %si
-	movw $\size, %cx
+	movw \begin, %si
+	movw \size, %cx
 	call dump
 .endm
 
-.macro RESET_DISK drive
-	pusha
-	movb $\drive, %dl
-	movw 0x0, %ah
-	call reset_disk
-	popa
+# Backup the drive number.
+.macro BACKUP_DRIVE_NUM
+	movb %dl, drive
 .endm
 
+# Restore the drive number
+.macro RESTORE_DRIVE_NUM
+	movb drive, %dl
+.endm
+
+# Read sectors from CD.
+.macro READ_CDROM sector_size, sector_offset0, sector_offset1, sector_offset2, sector_offset3
+        movw $disk_addr_packet, %si
+	movw \sector_size, 0x02(%si)
+	movw \sector_offset0, 0x08(%si)
+	movw \sector_offset1, 0x0a(%si)
+	movw \sector_offset2, 0x0c(%si)
+	movw \sector_offset3, 0x0e(%si)	
+        movb $0x42, %ah
+        RESTORE_DRIVE_NUM
+        int $0x13
+.endm	
 
 /**
  * Entry point
@@ -56,35 +72,46 @@
 .globl _start, start;
 _start:
 start:
+
 # The offset 0x0000 must be a jump to the reset of code.
 	jmp after_BPB
 	nop
+
 	. = _start + BOOT_MACHINE_BPB_START
 	. = _start + 4
+
+# BIOS will pass drive number to DL, but DL will be changed
+# by some BIOS interrupt call, so we need place to save it.
+drive:
+	.byte 0
+
+# Disk address packet is a 'structure' that will be passed
+# to the BIOS int13 extension call.
 disk_addr_packet:
 	.byte 0x10		# (00h) size of packet
 	.byte 0x00		# (01h) reserved
-	.word 0x0001		# (02h) number of blocks to transfer
+	.word 0x0000		# (02h) number of blocks to transfer
 	.word 0x8000, 0x0000	# (04h) DWORD, transfer buffer
-	.word 0x0011, 0x0000	# (08h) QWORD, starting absolute block number
+	.word 0x0000, 0x0000	# (08h) QWORD, starting absolute block number
 	.word 0x0000, 0x0000	
 				# (10h)
+
+
 	. = _start + BOOT_MACHINE_BPB_END
 after_BPB:
 	cli				# disable interrupt.
         movw $BOOTLOADER_ADDR, %ax	# set address expression
         movw %ax, %ds
         movw %ax, %es
-#	movw $BOOTLOADER_ADDR, %sp	# stack grows down to 0x0000
-#	sti
-	PRINT message_booting
+	movw $BOOTLOADER_ADDR, %sp	# stack grows down to 0x0000
+	BACKUP_DRIVE_NUM	
+	sti
 
 # We need make sure the BIOS supports the INT 13 extensions.
 int13_ext_check:
 	mov $0x41, %ah
 	mov $0x55aa, %bx
-	# DL should contain the drive value. But we'd better save it.
-	push %dx
+	RESTORE_DRIVE_NUM
 	int $0x13
         jc int13_ext_check_failed     
         cmpw $0xaa55, %bx
@@ -98,40 +125,24 @@ int13_ext_check_failed:
 	jmp loop
 
 read_cd_content:
-
-	# CHS mode : Cylinder-Head-Sector mode.
-	# LBA mode : Logical Block Addressing mode.
-	# When we use INT 13 extension, we use LBA mode in which
-	# the device is taken as a single large device.
-
 	PRINT message_loading_img
-	pop %dx
-	push %dx
-	movw $disk_addr_packet, %si
-	movb $0x42, %ah
-	int $0x13
-	jc error_read_sectors	
 
-	# Now the memory 0x8000 should contain the Boot Record.
-	# We need parse the Catalog LBA from it and load Catalog.
-	# The offset 71-74 is Catalog LBA, little-endia 32 bit number.		
-	# Note that the DS is 0x07C0 at this moment.
+# Find the primary volume descriptor first, so that we can find
+# root directory and path tables.
+	movw $0x0010, %cx
+pri_vol_desc_search_loop:
+	READ_CDROM $0x0001, %cx, $0x0000, $0x0000, $0x0000
+	jc error_read_sectors
 
-	movw $0x0447, %si
-	movw (%si), %ax
-	movw $disk_addr_packet, %si
-	movw %ax, 0x08(%si)
-	movw $0x0449, %si
-	movw (%si), %ax
-	movw $disk_addr_packet, %si
-	movw %ax, 0x0a(%si)
+# Note that the DS is 0x07c0	
+	movw $0x0400, %si
+	cmpb $0x01, (%si)
+	je found_pri_vol_desc
+	incw %cx
+	jmp pri_vol_desc_search_loop
 
-	movb $0x42, %ah
-	pop %dx
-	int $0x13
-	jc error_read_sectors 
-	
-	DUMP 0x0400, 32
+found_pri_vol_desc:		
+	DUMP $0x0400, $32
 	jmp loop
 
 error_read_sectors:
@@ -142,18 +153,17 @@ loop:
 	cli
 	hlt
 	jmp loop
-message_booting:
-        .asciz "Booting ...\r\n"
+
+
 message_halt:
 	.asciz "Boot Halt.\r\n"
 message_no_int13_ext:
-	.asciz "No INT13 extension. Boot failed.\r\n"
+	.asciz "No INT13 extension.\r\n"
 message_loading_img:
 	.asciz "Loading OS image.\r\n"
 message_sector_read_err:
-	.asciz "Sector read error.\r\n"
-hexdump:
-	.byte 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
+	.asciz "Read error.\r\n"
+
 
 /**
  * Write the string pointed to by %si
