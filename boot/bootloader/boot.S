@@ -45,19 +45,6 @@
 	popa
 .endm
 
-.macro READ_SECTORS drive, head, cylinder, sector, count, destination
-	pusha
-	movw $\destination, %ax
-	movw %ax, %es
-	xorw %bx, %bx
-	movb $\drive, %dl
-	movb $\head, %dh
-	movb $\cylinder, %ch
-	movb $\sector, %cl
-	movb $\count, %al
-	call read_sectors
-	popa
-.endm
 
 /**
  * Entry point
@@ -79,7 +66,7 @@ disk_addr_packet:
 	.byte 0x00		# (01h) reserved
 	.word 0x0001		# (02h) number of blocks to transfer
 	.word 0x8000, 0x0000	# (04h) DWORD, transfer buffer
-	.word 0x0010, 0x0000	# (08h) QWORD, starting absolute block number
+	.word 0x0011, 0x0000	# (08h) QWORD, starting absolute block number
 	.word 0x0000, 0x0000	
 				# (10h)
 	. = _start + BOOT_MACHINE_BPB_END
@@ -88,7 +75,8 @@ after_BPB:
         movw $BOOTLOADER_ADDR, %ax	# set address expression
         movw %ax, %ds
         movw %ax, %es
-	# movw $BOOTLOADER_ADDR, %sp	# stack grows down to 0x0000
+#	movw $BOOTLOADER_ADDR, %sp	# stack grows down to 0x0000
+#	sti
 	PRINT message_booting
 
 # We need make sure the BIOS supports the INT 13 extensions.
@@ -118,12 +106,32 @@ read_cd_content:
 
 	PRINT message_loading_img
 	pop %dx
+	push %dx
 	movw $disk_addr_packet, %si
 	movb $0x42, %ah
 	int $0x13
 	jc error_read_sectors	
+
+	# Now the memory 0x8000 should contain the Boot Record.
+	# We need parse the Catalog LBA from it and load Catalog.
+	# The offset 71-74 is Catalog LBA, little-endia 32 bit number.		
+	# Note that the DS is 0x07C0 at this moment.
+
+	movw $0x0447, %si
+	movw (%si), %ax
+	movw $disk_addr_packet, %si
+	movw %ax, 0x08(%si)
+	movw $0x0449, %si
+	movw (%si), %ax
+	movw $disk_addr_packet, %si
+	movw %ax, 0x0a(%si)
+
+	movb $0x42, %ah
+	pop %dx
+	int $0x13
+	jc error_read_sectors 
 	
-	DUMP 0x0400, 16
+	DUMP 0x0400, 32
 	jmp loop
 
 error_read_sectors:
@@ -221,20 +229,6 @@ dump:
 	PRINT enter_key	
 	movb $8,%dh
 	jmp 2b
-
-/**
- * Reset the disk controller, let it go to the first sector.
- * BIOS INT 0x13
- * AH = 0x00
- * DL = Drive to reset.
- * Return:
- * AH = Status code.
- * CF = Clear if success, set if failure.
- */	
-reset_disk:
-	int $0x13
-	jc reset_disk
-	ret
 
 /**
  * Read sectors into memory
