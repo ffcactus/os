@@ -43,6 +43,18 @@
 	popa
 .endm
 
+.macro DUMP_REG
+	pusha
+	movw %ax, ax
+	movw %bx, bx
+	movw %cx, cx
+	movw %dx, dx
+	movw %si, si
+	movw %di, di
+	DUMP $regs, $12
+	popa
+.endm
+
 # Print a area of data in hex format.
 .macro DUMP begin, size
 	movw \begin, %si
@@ -62,6 +74,7 @@
 
 # Read sectors from CD.
 .macro READ_CDROM sector_size, sector_offset0, sector_offset1, sector_offset2, sector_offset3
+	pusha
         movw $disk_addr_packet, %si
 	movw \sector_size, 0x02(%si)
 	movw \sector_offset0, 0x08(%si)
@@ -71,36 +84,42 @@
         movb $0x42, %ah
         RESTORE_DRIVE_NUM
         int $0x13
+	popa
 .endm	
 
 # In a directory entry, find file by name,
 # and save the file head and length.
-.macro SEARCH_FILE dir_entrys, entrys_size, name
+.macro SEARCH_FILE dir_entry, entry_size, name
 	pusha
 	# skip self and parent.
-	movw \entry, %si
+	movw \dir_entry, %si
+	xorw %ax, %ax
 	movb (%si), %al
-	addb %al, %si
+	addw %ax, %si
 	movb (%si), %al
-	addb %al, %si
+	addw %ax, %si
 	# now the SI should point to the head of directory entry.
 search_next:
-	push $si
+	push %si
 	# save next strade.
 	movb (%si), %al
 	# save file identifer length.
 	xorw %cx, %cx
 	movb 32(%si), %cl
 	# to the offset of file identifer.	
-	addb $33, %si	
+	addw $33, %si
 	movw \name, %di
 	cld
 	rep cmpsb
 	je file_found
 	pop %si
-	addb %al, %si
-	cmpw %si, entry_size
-	jb search_next
+	addw %ax, %si
+	movw %si, %bx
+	subw \dir_entry, %bx
+	cmpw \entry_size, %bx
+	DUMP \entry_size, 
+	DUMP_REG
+	jae search_next
 file_not_found:
 	PRINT $message_not_found
 	jmp file_search_end
@@ -133,6 +152,22 @@ start:
 
 # BIOS will pass drive number to DL, but DL will be changed
 # by some BIOS interrupt call, so we need place to save it.
+regs:
+ax:
+	.word 0
+bx:	
+	.word 0
+cx:
+	.word 0
+dx:
+	.word 0
+si:
+	.word 0
+di:
+	.word 0
+
+tmp_word:
+	.word 0
 drive:
 	.byte 0
 
@@ -185,18 +220,25 @@ read_cd_content:
 # root directory.
 	READ_CDROM $0x0001, $0x0010, $0x0000, $0x0000, $0x0000
 	jc error_read_sectors
-	
+	DUMP $0x0400, $16
+
 	# 0x0400 + 0x9c (Directory entry for the root directory)
 	# + 0x02 (Location of extent LBA)
 	MEM_COPY $0x049e, $root_lba, $4
 	
 	# 0x0400 + 0x9c + 0x0a
 	MEM_COPY $0x04a6, $root_length, $4
-	DUMP $root_length, $4
-	DUMP $root_lba, $4	
 found_pri_vol_desc:
-	READ_CDROM $root_length, $root_lba, $0x0000, $0x0000, $0x0000		
-	DUMP $0x0400, $16
+	
+	# The data length should changed to number of blocks.
+	movw $root_lba, %si
+	movw (%si), %bx
+	READ_CDROM $1, %bx, $0x0000, $0x0000, $0x0000
+	
+	# Now our buffer should contain the root directory entries.
+	SEARCH_FILE $0x0400, $0x0800, $my_dir   
+	
+	#DUMP $0x0400, $16
 	jmp loop
 
 error_read_sectors:
@@ -217,10 +259,16 @@ message_loading_img:
 	.asciz "Loading OS image.\r\n"
 message_sector_read_err:
 	.asciz "Read error.\r\n"
+my_dir:
+	.ascii "DIR"
 message_not_found:
 	.asciz "Not found.\r\n"
 message_found:
 	.asciz "Found.\r\n"
+file1:
+	.ascii "BOOT"
+file2:
+	.ascii "BOOT"
 
 /**
  * Write the string pointed to by %si
