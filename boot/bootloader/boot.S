@@ -18,7 +18,7 @@
 .equ BOOT_MACHINE_BPB_END, 0x5a
 
 # The offset of the end of the partition table.
-.equ BOOT_MACHINE_PART_END, 0x1fe
+.equ BOOT_MACHINE_PART_END, 0x7fe
 
 /* The segment of disk buffer. The disk buffer MUST be 32K long and
    cannot straddle a 64K boundary.  */
@@ -27,8 +27,19 @@
 # Print a string.
 .macro PRINT str
 	pusha
-	movw $\str, %si
+	movw \str, %si
 	call print
+	popa
+.endm
+
+# Copy memory.
+.macro MEM_COPY from, to, bytes
+	pusha
+	movw \from, %si
+	movw \to, %di
+	movw \bytes, %cx
+	cld
+	rep movsb	
 	popa
 .endm
 
@@ -61,6 +72,46 @@
         RESTORE_DRIVE_NUM
         int $0x13
 .endm	
+
+# In a directory entry, find file by name,
+# and save the file head and length.
+.macro SEARCH_FILE dir_entrys, entrys_size, name
+	pusha
+	# skip self and parent.
+	movw \entry, %si
+	movb (%si), %al
+	addb %al, %si
+	movb (%si), %al
+	addb %al, %si
+	# now the SI should point to the head of directory entry.
+search_next:
+	push $si
+	# save next strade.
+	movb (%si), %al
+	# save file identifer length.
+	xorw %cx, %cx
+	movb 32(%si), %cl
+	# to the offset of file identifer.	
+	addb $33, %si	
+	movw \name, %di
+	cld
+	rep cmpsb
+	je file_found
+	pop %si
+	addb %al, %si
+	cmpw %si, entry_size
+	jb search_next
+file_not_found:
+	PRINT $message_not_found
+	jmp file_search_end
+file_found:
+	PRINT $message_found
+file_search_end:
+	popa
+.endm
+
+	
+	
 
 /**
  * Entry point
@@ -95,7 +146,10 @@ disk_addr_packet:
 	.word 0x0000, 0x0000	# (08h) QWORD, starting absolute block number
 	.word 0x0000, 0x0000	
 				# (10h)
-
+root_lba:
+	.word 0x0000, 0x0000
+root_length:
+	.word 0x0000, 0x0000	
 
 	. = _start + BOOT_MACHINE_BPB_END
 after_BPB:
@@ -121,35 +175,35 @@ int13_ext_check:
 	jmp read_cd_content
 
 int13_ext_check_failed:
-	PRINT message_no_int13_ext
+	PRINT $message_no_int13_ext
 	jmp loop
 
 read_cd_content:
-	PRINT message_loading_img
+	PRINT $message_loading_img
 
-# Find the primary volume descriptor first, so that we can find
-# root directory and path tables.
-	movw $0x0010, %cx
-pri_vol_desc_search_loop:
-	READ_CDROM $0x0001, %cx, $0x0000, $0x0000, $0x0000
+# Load the primary volume descriptor first, so that we can find
+# root directory.
+	READ_CDROM $0x0001, $0x0010, $0x0000, $0x0000, $0x0000
 	jc error_read_sectors
-
-# Note that the DS is 0x07c0	
-	movw $0x0400, %si
-	cmpb $0x01, (%si)
-	je found_pri_vol_desc
-	incw %cx
-	jmp pri_vol_desc_search_loop
-
-found_pri_vol_desc:		
-	DUMP $0x0400, $32
+	
+	# 0x0400 + 0x9c (Directory entry for the root directory)
+	# + 0x02 (Location of extent LBA)
+	MEM_COPY $0x049e, $root_lba, $4
+	
+	# 0x0400 + 0x9c + 0x0a
+	MEM_COPY $0x04a6, $root_length, $4
+	DUMP $root_length, $4
+	DUMP $root_lba, $4	
+found_pri_vol_desc:
+	READ_CDROM $root_length, $root_lba, $0x0000, $0x0000, $0x0000		
+	DUMP $0x0400, $16
 	jmp loop
 
 error_read_sectors:
-	PRINT message_sector_read_err
+	PRINT $message_sector_read_err
 	jmp loop
 loop:
-	PRINT message_halt
+	PRINT $message_halt
 	cli
 	hlt
 	jmp loop
@@ -163,7 +217,10 @@ message_loading_img:
 	.asciz "Loading OS image.\r\n"
 message_sector_read_err:
 	.asciz "Read error.\r\n"
-
+message_not_found:
+	.asciz "Not found.\r\n"
+message_found:
+	.asciz "Found.\r\n"
 
 /**
  * Write the string pointed to by %si
@@ -203,6 +260,7 @@ index:
 enter_key:
 .asciz "\r\n"
 1:
+	PRINT $enter_key
 	ret
 dump:
 	movb $10, %dl		# DL = row counter, DH = column counter.
@@ -236,7 +294,7 @@ dump:
 	dec %cx
 	dec %dh 
 	jnz 2b
-	PRINT enter_key	
+	PRINT $enter_key	
 	movb $8,%dh
 	jmp 2b
 
@@ -260,6 +318,6 @@ read_sectors:
 	jc read_sectors
 	ret
 
-	.fill 0x1fe - (. - _start) ,1,0
+	.fill BOOT_MACHINE_PART_END - (. - _start) ,1,0
 	.org _start + BOOT_MACHINE_PART_END
 	.word BOOT_MACHINE_SIGNATURE
