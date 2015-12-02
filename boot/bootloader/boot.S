@@ -24,6 +24,18 @@
    cannot straddle a 64K boundary.  */
 .equ BOOT_MACHINE_BUFFER_SEG, 0x7000
 
+# Standard function entry
+.macro ENTER
+	pushw %bp
+	movw %sp, %bp
+.endm
+
+# Standard function leave
+.macro LEAVE
+	movw %bp, %sp
+	popw %bp
+.endm
+
 # Print a string.
 .macro PRINT str
 	pusha
@@ -89,47 +101,17 @@
 
 # In a directory entry, find file by name,
 # and save the file head and length.
-.macro SEARCH_FILE dir_entry, entry_size, name
-	pusha
-	# skip self and parent.
-	movw \dir_entry, %si
-	xorw %ax, %ax
-	movb (%si), %al
-	addw %ax, %si
-	movb (%si), %al
-	addw %ax, %si
-	# now the SI should point to the head of directory entry.
-search_next:
-	push %si
-	# save next strade.
-	movb (%si), %al
-	# save file identifer length.
-	xorw %cx, %cx
-	movb 32(%si), %cl
-	# to the offset of file identifer.	
-	addw $33, %si
-	movw \name, %di
-	cld
-	rep cmpsb
-	je file_found
-	pop %si
-	addw %ax, %si
-	movw %si, %bx
-	subw \dir_entry, %bx
-	cmpw \entry_size, %bx
-	DUMP \entry_size, 
-	DUMP_REG
-	jae search_next
-file_not_found:
-	PRINT $message_not_found
-	jmp file_search_end
-file_found:
-	PRINT $message_found
-file_search_end:
-	popa
+.macro SEARCH_FILE dir_entry, dir_size, name, file_entry, file_size
+        pushw \file_size
+        pushw \file_entry
+        pushw \name
+        pushw \dir_size
+        pushw \dir_entry
+        call search_file
+        addw $10, %sp
 .endm
 
-	
+
 	
 
 /**
@@ -181,9 +163,9 @@ disk_addr_packet:
 	.word 0x0000, 0x0000	# (08h) QWORD, starting absolute block number
 	.word 0x0000, 0x0000	
 				# (10h)
-root_lba:
+entry_lba:
 	.word 0x0000, 0x0000
-root_length:
+entry_size:
 	.word 0x0000, 0x0000	
 
 	. = _start + BOOT_MACHINE_BPB_END
@@ -220,23 +202,23 @@ read_cd_content:
 # root directory.
 	READ_CDROM $0x0001, $0x0010, $0x0000, $0x0000, $0x0000
 	jc error_read_sectors
-	DUMP $0x0400, $16
 
 	# 0x0400 + 0x9c (Directory entry for the root directory)
 	# + 0x02 (Location of extent LBA)
-	MEM_COPY $0x049e, $root_lba, $4
+	MEM_COPY $0x049e, $entry_lba, $4
 	
 	# 0x0400 + 0x9c + 0x0a
-	MEM_COPY $0x04a6, $root_length, $4
+	MEM_COPY $0x04a6, $entry_size, $4
 found_pri_vol_desc:
 	
 	# The data length should changed to number of blocks.
-	movw $root_lba, %si
+	movw $entry_lba, %si
 	movw (%si), %bx
 	READ_CDROM $1, %bx, $0x0000, $0x0000, $0x0000
-	
+	DUMP $0x0400, $16
+
 	# Now our buffer should contain the root directory entries.
-	SEARCH_FILE $0x0400, $0x0800, $my_dir   
+	SEARCH_FILE $0x0400, $0x0800, $my_dir, $entry_lba, $entry_lba  
 	
 	#DUMP $0x0400, $16
 	jmp loop
@@ -366,6 +348,57 @@ read_sectors:
 	jc read_sectors
 	ret
 
+/**
+ * search a file in a directory entry.
+ * C prototype:
+ * boolean search_file(
+ *	uint_16 dir_entry,  	-- 4(%bp) 
+ * 	uint_16 entry_size, 	-- 6(%bp)
+ *	char* name,		-- 8(%bp)
+ *	uint_16* file_entry,	-- 10(%bp)
+ *	uint_16* file_size	-- 12(%bp)
+ * );
+ */
+search_file:
+	ENTER
+	# skip self and parent.
+	movw 4(%bp), %si
+	DUMP_REG
+	xorw %ax, %ax
+	movb (%si), %al
+	addw %ax, %si
+	movb (%si), %al
+	addw %ax, %si
+	# now the SI should point to the head of normal file entries.
+search_next:
+	push %si
+	# save next strade.
+	movb (%si), %al
+	# save file identifer length.
+	xorw %cx, %cx
+	movb 32(%si), %cl
+	# to the offset of file identifer.	
+	addw $33, %si
+	movw 8(%bp), %di
+	cld
+	rep cmpsb
+	je file_found
+	pop %si
+	addw %ax, %si
+	movw %si, %bx
+	subw 6(%bp), %bx
+	cmpw 6(%bp), %bx
+	jae search_next
+file_not_found:
+	PRINT $message_not_found
+	jmp file_search_end
+file_found:
+	PRINT $message_found
+file_search_end:
+	
+	LEAVE
+	ret
+	
 	.fill BOOT_MACHINE_PART_END - (. - _start) ,1,0
 	.org _start + BOOT_MACHINE_PART_END
 	.word BOOT_MACHINE_SIGNATURE
