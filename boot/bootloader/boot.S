@@ -56,7 +56,6 @@
 .endm
 
 .macro DUMP_REG
-	pusha
 	movw %ax, ax
 	movw %bx, bx
 	movw %cx, cx
@@ -64,14 +63,15 @@
 	movw %si, si
 	movw %di, di
 	DUMP $regs, $12
-	popa
 .endm
 
 # Print a area of data in hex format.
 .macro DUMP begin, size
+	pusha
 	movw \begin, %si
 	movw \size, %cx
 	call dump
+	popa
 .endm
 
 # Backup the drive number.
@@ -242,15 +242,11 @@ message_loading_img:
 message_sector_read_err:
 	.asciz "Read error.\r\n"
 my_dir:
-	.ascii "DIR"
-message_not_found:
-	.asciz "Not found.\r\n"
+	.ascii "DDDD"
+message_search_done:
+	.asciz "Search done.\r\n"
 message_found:
 	.asciz "Found.\r\n"
-file1:
-	.ascii "BOOT"
-file2:
-	.ascii "BOOT"
 
 /**
  * Write the string pointed to by %si
@@ -361,16 +357,12 @@ read_sectors:
  */
 search_file:
 	ENTER
-	# skip self and parent.
-	movw 4(%bp), %si
-	DUMP_REG
 	xorw %ax, %ax
-	movb (%si), %al
-	addw %ax, %si
-	movb (%si), %al
-	addw %ax, %si
-	# now the SI should point to the head of normal file entries.
-search_next:
+	movw 4(%bp), %si
+1:
+	cmpb $0x00, (%si)
+	je file_search_done
+	# now the SI should point to the head of file entries.
 	push %si
 	# save next strade.
 	movb (%si), %al
@@ -382,20 +374,14 @@ search_next:
 	movw 8(%bp), %di
 	cld
 	rep cmpsb
-	je file_found
+	je file_search_found
 	pop %si
 	addw %ax, %si
-	movw %si, %bx
-	subw 6(%bp), %bx
-	cmpw 6(%bp), %bx
-	jae search_next
-file_not_found:
-	PRINT $message_not_found
-	jmp file_search_end
-file_found:
+	jmp 1b
+file_search_found:
 	PRINT $message_found
-file_search_end:
-	
+file_search_done:
+	PRINT $message_search_done
 	LEAVE
 	ret
 	
