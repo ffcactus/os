@@ -219,8 +219,11 @@ found_pri_vol_desc:
 
 	# Now our buffer should contain the root directory entries.
 	SEARCH_FILE $0x0400, $0x0800, $my_dir, $entry_lba, $entry_lba  
-	
-	#DUMP $0x0400, $16
+	cmpb $1, %ah
+	je show_file
+	jmp loop
+show_file:
+	PRINT $message_found
 	jmp loop
 
 error_read_sectors:
@@ -347,41 +350,68 @@ read_sectors:
 /**
  * search a file in a directory entry.
  * C prototype:
- * boolean search_file(
+ * search_file(
  *	uint_16 dir_entry,  	-- 4(%bp) 
  * 	uint_16 entry_size, 	-- 6(%bp)
  *	char* name,		-- 8(%bp)
  *	uint_16* file_entry,	-- 10(%bp)
  *	uint_16* file_size	-- 12(%bp)
  * );
+ * Return:
+ * AH = 1 = found; AH  = 0 = Not found.
+ * AL = File flag.
  */
 search_file:
 	ENTER
+	subw $3, %sp	# -2(%bp), temp_si
+			# -3(%bp), temp_file_flag
 	xorw %ax, %ax
 	movw 4(%bp), %si
 1:
 	cmpb $0x00, (%si)
 	je file_search_done
 	# now the SI should point to the head of file entries.
-	push %si
+	movw %si, -2(%bp)
 	# save next strade.
 	movb (%si), %al
 	# save file identifer length.
 	xorw %cx, %cx
 	movb 32(%si), %cl
+	# save file flag
+	movb 25(%si), %bl
+	movb %bl, -3(%bp)
 	# to the offset of file identifer.	
 	addw $33, %si
 	movw 8(%bp), %di
 	cld
 	rep cmpsb
 	je file_search_found
-	pop %si
+	movw -2(%bp), %si
 	addw %ax, %si
 	jmp 1b
 file_search_found:
-	PRINT $message_found
+	# save file LBA
+	movw -2(%bp), %si
+	addw $2, %si
+	movw 10(%bp), %di
+	movw $4, %cx
+	cld
+	rep movsb	 
+	
+	# save file size.
+	movw -2(%bp), %si
+	addw $10, %si
+	movw 12(%bp), %di
+	movw $4, %cx
+	cld
+	rep movsb
+	
+	movb $1, %ah
+	movb -3(%bp), %al	
+	jmp file_search_leave
 file_search_done:
-	PRINT $message_search_done
+	xorw %ax,%ax
+file_search_leave:
 	LEAVE
 	ret
 	
