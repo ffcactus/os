@@ -215,22 +215,24 @@ found_pri_vol_desc:
 	movw $entry_lba, %si
 	movw (%si), %bx
 	READ_CDROM $1, %bx, $0x0000, $0x0000, $0x0000
-	DUMP $0x0400, $16
 
 	# Now our buffer should contain the root directory entries.
-	SEARCH_FILE $0x0400, $0x0800, $my_dir, $entry_lba, $entry_lba  
+	SEARCH_FILE $0x0400, $0x0800, $my_dir, $entry_lba, $entry_size  
 	cmpb $1, %ah
 	je show_file
 	jmp loop
 show_file:
-	PRINT $message_found
+	movw $entry_lba, %si
+	movw (%si), %bx
+	READ_CDROM $1, %bx, $0x0000, $0x0000, $0x0000
 	jmp loop
 
 error_read_sectors:
 	PRINT $message_sector_read_err
 	jmp loop
 loop:
-	PRINT $message_halt
+	jmp $0x0800, $0
+		
 	cli
 	hlt
 	jmp loop
@@ -245,7 +247,7 @@ message_loading_img:
 message_sector_read_err:
 	.asciz "Read error.\r\n"
 my_dir:
-	.ascii "DDDD"
+	.ascii "STARTUP.BIN;1"
 message_search_done:
 	.asciz "Search done.\r\n"
 message_found:
