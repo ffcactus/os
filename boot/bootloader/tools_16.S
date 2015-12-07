@@ -72,4 +72,18 @@ dump:
         PRINT $enter_key
         movb $8,%dh
         jmp 2b
+
+regs:
+ax:
+        .word 0
+bx:
+        .word 0
+cx:
+        .word 0
+dx:
+        .word 0
+si:
+        .word 0
+di:
+        .word 0
 	

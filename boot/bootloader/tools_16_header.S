@@ -43,3 +43,13 @@
 	hlt
 .endm
 
+.macro DUMP_REG
+        movw %ax, ax
+        movw %bx, bx
+        movw %cx, cx
+        movw %dx, dx
+        movw %si, si
+        movw %di, di
+        DUMP $regs, $12
+.endm
+

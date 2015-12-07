@@ -1,3 +1,8 @@
+/**
+ * We've been loaded at 0x8000.
+ */
+
+
 .include "tools_16_header.S"
 
 
@@ -14,6 +19,11 @@ _start:
 	movw %ax, %gs
 	movw %ax, %ss
 
+	movb $0x0f, %ah
+	int $0x10
+	DUMP_REG
+	call clear_screen_16
+	PRINT $message
 	lgdt gdt_descriptor
 
 	movl %cr0, %eax
@@ -23,7 +33,21 @@ _start:
 
 # Includes some helpful functions.
 .include "tools_16.S"
- 
+
+clear_screen_16:
+	movw $0xb800, %ax
+	movw %ax, %es
+	movw $0x0000, %di
+	movw $2000, %cx
+	movb $0x1f, %ah
+	movb $' ', %al
+	cld
+	rep stosw
+	movb $0x02, %ah
+	movw $0x0000, %dx
+	movb $0x00, %bh
+	int $0x10
+	ret
 message:
 	.asciz "Into protect mode.\r\n"
 
@@ -57,9 +81,37 @@ gdt_descriptor:
 protect_mode:
 	movw $0x0010, %ax 	# set data segments to data descriptor
 	movw %ax, %ds
-	movw %ax, %ss
 	movw %ax, %es
-	movl $0x90000, %esp
-	cli
+	movw %ax, %fs
+	movw %ax, %gs
+	movw %ax, %ss
+	
+	movl $0x90000, %eax
+#	movl protect_mode, %eax
+	movl %eax, %esp
+	movl %eax, %ebp
+#	call enable_a20
+	call clear_screen
+	
 loop:
 	jmp loop
+
+enable_a20:
+	in $0x64, %al
+	test $2, %al
+	jnz enable_a20
+	movb $0xdd, %al
+	out %al, $0x64
+	ret
+
+clear_screen:
+	movw 0x0, %es
+	movl $0xb8000, %edi
+	movw $2000, %cx
+	movb $0x01, %ah
+	movb $'*', %al
+	cld
+	rep stosw
+	ret
+
+	

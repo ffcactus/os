@@ -26,17 +26,6 @@
 
 .include "tools_16_header.S"
 
-.macro DUMP_REG
-	movw %ax, ax
-	movw %bx, bx
-	movw %cx, cx
-	movw %dx, dx
-	movw %si, si
-	movw %di, di
-	DUMP $regs, $12
-.endm
-
-
 # Backup the drive number.
 .macro BACKUP_DRIVE_NUM
 	movb %dl, drive
@@ -97,19 +86,6 @@ start:
 
 # BIOS will pass drive number to DL, but DL will be changed
 # by some BIOS interrupt call, so we need place to save it.
-regs:
-ax:
-	.word 0
-bx:	
-	.word 0
-cx:
-	.word 0
-dx:
-	.word 0
-si:
-	.word 0
-di:
-	.word 0
 
 tmp_word:
 	.word 0
@@ -157,7 +133,7 @@ int13_ext_check:
 
 int13_ext_check_failed:
 	PRINT $message_no_int13_ext
-	jmp loop
+	jmp end_loop
 
 read_cd_content:
 	PRINT $message_loading_img
@@ -181,25 +157,27 @@ found_pri_vol_desc:
 	READ_CDROM $1, %bx, $0x0000, $0x0000, $0x0000
 
 	# Now our buffer should contain the root directory entries.
-	SEARCH_FILE $0x0400, $0x0800, $my_dir, $entry_lba, $entry_size  
+	SEARCH_FILE $0x0400, $0x0800, $startup_file, $entry_lba, $entry_size  
 	cmpb $1, %ah
-	je show_file
-	jmp loop
-show_file:
+	je load_startup
+	jmp error_no_startup 
+load_startup:
 	movw $entry_lba, %si
 	movw (%si), %bx
 	READ_CDROM $1, %bx, $0x0000, $0x0000, $0x0000
-	jmp loop
+	jc error_read_sectors
+	jmp $0x0800, $0
+	
 
 error_read_sectors:
 	PRINT $message_sector_read_err
-	jmp loop
-loop:
-	jmp $0x0800, $0
-		
+	jmp end_loop
+error_no_startup:
+	PRINT $message_no_startup
+	jmp end_loop
+end_loop:
 	cli
 	hlt
-	jmp loop
 
 
 message_halt:
@@ -209,8 +187,10 @@ message_no_int13_ext:
 message_loading_img:
 	.asciz "Loading OS image.\r\n"
 message_sector_read_err:
-	.asciz "Read error.\r\n"
-my_dir:
+	.asciz "Sector Read error.\r\n"
+message_no_startup:
+	.asciz "Can't find startup.bin\r\n"
+startup_file:
 	.ascii "STARTUP.BIN;1"
 message_search_done:
 	.asciz "Search done.\r\n"
