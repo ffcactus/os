@@ -166,7 +166,39 @@ load_startup:
 	movw (%si), %bx
 	READ_CDROM $1, %bx, $0x0000, $0x0000, $0x0000
 	jc error_read_sectors
-	jmp $0x0800, $0
+
+# Prepare turn to protect mode.
+	movb $0x00, %ah
+	movb $0x03, %al
+	int $0x10		# Text mode, 16 colors, 80x25, 640x200.
+	
+	movb $0x02, %ah
+	movb $0x00, %bh
+	movw $0x0000, %dx
+	int $0x10		# Set cursor position to (0,0)
+
+	cli			# Turn off interrupt.
+
+	lgdt gdt_descriptor	# Load GDT descriptor.
+
+	movl %cr0, %eax		# Open protect mode.
+	orl $1, %eax
+	movl %eax, %cr0
+
+        movw $0x0010, %ax       # set data segments to data descriptor
+        movw %ax, %ds
+        movw %ax, %es
+        movw %ax, %fs
+        movw %ax, %gs
+        movw %ax, %ss
+	
+        movl $0x90000, %eax	# set stack.
+        movl %eax, %esp
+        movl %eax, %ebp
+
+        call enable_a20		# enable A20.
+
+        jmp $0x08, $0x8000	# jump to the target program.
 	
 
 error_read_sectors:
@@ -286,6 +318,56 @@ file_search_done:
 file_search_leave:
 	LEAVE
 	ret
+
+clear_screen_16:
+        movw $0xb800, %ax
+        movw %ax, %es
+        movw $0x0000, %di
+        movw $2000, %cx
+        movb $0x1f, %ah
+        movb $' ', %al
+        cld
+        rep stosw
+        movb $0x02, %ah
+        movw $0x0000, %dx
+        movb $0x00, %bh
+        int $0x10
+        ret
+
+enable_a20:
+        in $0x64, %al
+        test $2, %al
+        jnz enable_a20
+        movb $0xdd, %al
+        out %al, $0x64
+        ret
+
+
+/**
+ * The GDT table.
+ */
+gdt:
+# null descriptor
+        .quad 0
+# code descriptor
+        .word 0xffff            # segment limit low
+        .word 0                 # base address low
+        .byte 0                 # base address middle
+        .byte 0b10011010        # access
+        .byte 0b11001111        # granularity
+        .byte 0                 # base address high
+# data descriptor
+        .word 0xffff            # segment limit low
+        .word 0                 # base address low
+        .byte 0                 # base address middle
+        .byte 0b10010010        # access
+        .byte 0b11001111        # granularity
+        .byte 0                 # base address high
+gdt_end:
+gdt_descriptor:
+        .word gdt_end - gdt - 1
+        .long 0x7c00 + gdt
+	
 	
 	.fill BOOT_MACHINE_PART_END - (. - _start) ,1,0
 	.org _start + BOOT_MACHINE_PART_END
