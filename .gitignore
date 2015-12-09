@@ -4,6 +4,7 @@
 *.swp
 *.dump
 *.bin
+*.elf
 *.flp
 boot/bootloader/iso/
 target

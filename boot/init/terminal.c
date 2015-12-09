@@ -10,8 +10,8 @@
 #define ROW	25
 #define VGA_COLOR_TEXT_MAP_ADDR	0xb8000
 
-//static uint8_t x, y;
-//static int16_t * const map_start = (int16_t *)VGA_COLOR_TEXT_MAP_ADDR;
+static uint8_t x = 0x22, y = 0x11;
+static int16_t * const map_start = (int16_t *)VGA_COLOR_TEXT_MAP_ADDR;
 
 enum vga_color {
 	COLOR_BLACK = 0,
@@ -42,10 +42,25 @@ void term_init(void) {
 	uint16_t i;
 	int16_t * const map_start = (int16_t *)VGA_COLOR_TEXT_MAP_ADDR;
 	uint16_t c16 = vga_char(' ', COLOR_BLUE, COLOR_WHITE);
+	//x = 0;
+	//y = 0;
 	for(i = 0; i < (COL * ROW); i++)
 		map_start[i] = c16;
 }
 
+void put_char(char c) {
+	map_start[y * COL + x] = vga_char(c, COLOR_BLUE, COLOR_WHITE);
+	x++;
+	if(x == COL) {
+		x = 0;
+		y++;
+		if(y == ROW) {
+			//scroll();
+		}
+	}
+}
+
+
 void term_printf(const char* s) {
-	s = s;
+	while(*s != '\0') put_char(*s++);
 }

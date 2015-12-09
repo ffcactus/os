@@ -1,4 +1,4 @@
-#include "common_header.h"
+#include <stdint.h>
 
 size_t strlen(const char* str) {
 	size_t ret = 0;
