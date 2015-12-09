@@ -165,8 +165,6 @@ load_startup:
 	movw $entry_lba, %si
 	movw (%si), %bx
 	READ_CDROM $1, %bx, $0x0000, $0x0000, $0x0000
-	DUMP $0x0400, $32
-	jmp .
 	jc error_read_sectors
 	
 # Prepare turn to protect mode.
