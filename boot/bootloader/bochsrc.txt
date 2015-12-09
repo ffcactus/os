@@ -1,0 +1,14 @@
+megs: 1024
+romimage: file=$BXSHARE/BIOS-bochs-latest
+# if you copied the file in the local directory, use instead
+#romimage: file=BIOS-bochs-latest
+vgaromimage: file=$BXSHARE/VGABIOS-lgpl-latest
+# if you copied the 2.40 file in the local directory, use instead
+#vgaromimage: file=VGABIOS-elpin-2.40
+boot: disk, cdrom
+floppya: 1_44=floppy.img, status=ejected
+ata0-master: type=disk, path="minix.img", mode=flat
+ata1-master: type=cdrom, path="boot.iso", status=inserted
+log: out.bochs
+mouse: enabled=0
+com1: enabled=1, mode=file, dev="serial.out"

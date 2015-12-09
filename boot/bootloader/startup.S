@@ -17,7 +17,7 @@ clear_screen:
 	movl $0xb8000, %edi
 	movw $2000, %cx
 	movb $0x1f, %ah
-	movb $' ', %al
+	movb $'*', %al
 	cld
 	rep stosw
 	ret

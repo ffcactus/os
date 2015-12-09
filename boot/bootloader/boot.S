@@ -165,8 +165,10 @@ load_startup:
 	movw $entry_lba, %si
 	movw (%si), %bx
 	READ_CDROM $1, %bx, $0x0000, $0x0000, $0x0000
+	DUMP $0x0400, $32
+	jmp .
 	jc error_read_sectors
-
+	
 # Prepare turn to protect mode.
 	movb $0x00, %ah
 	movb $0x03, %al
@@ -178,7 +180,7 @@ load_startup:
 	int $0x10		# Set cursor position to (0,0)
 
 	cli			# Turn off interrupt.
-
+	
 	lgdt gdt_descriptor	# Load GDT descriptor.
 
 	movl %cr0, %eax		# Open protect mode.

@@ -17,7 +17,6 @@ cd: all
 		-b BOOT/LOADER.SYS -no-emul-boot -boot-load-size 4 \
 		-input-charset utf-8 \
 		-o ./boot.iso ./iso
-	hexdump -C boot.iso > boot.iso.dump
 	qemu-system-i386 -cdrom boot.iso &
 
 clean:

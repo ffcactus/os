@@ -6,5 +6,5 @@
 *.bin
 *.flp
 boot/bootloader/iso/
-
+target
 
