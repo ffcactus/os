@@ -10,7 +10,7 @@
  */
 void _start() {
 	term_init();
-	term_printf("xxxx");
+	term_printf("Hello World!");
 	while(1);
 }
 

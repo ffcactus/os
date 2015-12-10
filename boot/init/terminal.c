@@ -10,7 +10,7 @@
 #define ROW	25
 #define VGA_COLOR_TEXT_MAP_ADDR	0xb8000
 
-static uint8_t x = 0x22, y = 0x11;
+static uint8_t x = (80 - 12) / 2, y = 25 / 2;
 static int16_t * const map_start = (int16_t *)VGA_COLOR_TEXT_MAP_ADDR;
 
 enum vga_color {
