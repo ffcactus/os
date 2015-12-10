@@ -40,7 +40,9 @@
 .macro READ_CDROM sector_size, sector_offset0, sector_offset1, sector_offset2, sector_offset3
 	pusha
         movw $disk_addr_packet, %si
-	movw \sector_size, 0x02(%si)
+	movw \sector_size, %ax		# NOTE, sector on CD is 2Kb, BIOS sector is 512b.
+	shlw $4, %ax
+	movw %ax, 0x02(%si)
 	movw \sector_offset0, 0x08(%si)
 	movw \sector_offset1, 0x0a(%si)
 	movw \sector_offset2, 0x0c(%si)
@@ -103,9 +105,9 @@ disk_addr_packet:
 	.word 0x0000, 0x0000	
 				# (10h)
 entry_lba:
-	.word 0x0000, 0x0000
+	.long 0x00000000
 entry_size:
-	.word 0x0000, 0x0000	
+	.long 0x00000000	
 
 	. = _start + BOOT_MACHINE_BPB_END
 
@@ -162,11 +164,17 @@ found_pri_vol_desc:
 	je load_startup
 	jmp error_no_startup 
 load_startup:
+	movw $entry_size, %si
+	movl (%si), %eax
+	sarl $11, %eax
+	movw %ax, (%si)		# NOTE: No more than 0xffff sectors!
 	movw $entry_lba, %si
 	movw (%si), %bx
-	READ_CDROM $1, %bx, $0x0000, $0x0000, $0x0000
+	movw $entry_size, %si
+	movw (%si), %ax
+	READ_CDROM %ax, %bx, $0x0000, $0x0000, $0x0000
 	jc error_read_sectors
-	
+
 # Prepare turn to protect mode.
 	movb $0x00, %ah
 	movb $0x03, %al
