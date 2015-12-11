@@ -38,24 +38,38 @@ enum vga_color {
 #define CURSOR_LOCATION_H	0x0e
 #define CURSOR_LOCATION_L	0x0f
 
-static inline void update_cursor() {
-	if(x == COL) {
-		x = 0;
-		y++;
-		if(y == ROW) {
-			//scroll();
-		}
-	}
-
-	outb(VGA_CTL_INDEX_REG, CURSOR_LOCATION_L);
-	outb(VGA_CTL_DATA_REG, x);
-	outb(VGA_CTL_INDEX_REG, CURSOR_LOCATION_H);
-	outb(VGA_CTL_DATA_REG, y);
-}
-
 static inline uint16_t vga_char(char c, enum vga_color bg, enum vga_color fg) {
 	uint16_t c16 = c;
 	return c16 | ((fg | bg << 4) << 8);
+}
+
+static inline void scroll(void) {
+	size_t i;
+	for(i = 0; i < COL * (ROW - 1); i++) {
+		map_start[i] = map_start[i + COL];
+	}
+	while(i < (COL * ROW))
+		map_start[i++] = vga_char(' ', COLOR_BLUE, COLOR_WHITE);
+}
+
+static inline void increase_x(uint8_t offset) {
+	x += offset;
+	if(x >= COL){
+		x = 0;
+		y++;
+		if(y == ROW) {
+			y--;
+			scroll();
+		}
+	}
+}
+
+static inline void update_cursor() {
+	uint16_t i = y * COL + x;
+	outb(VGA_CTL_INDEX_REG, CURSOR_LOCATION_L);
+	outb(VGA_CTL_DATA_REG, i & 0x00ff);
+	outb(VGA_CTL_INDEX_REG, CURSOR_LOCATION_H);
+	outb(VGA_CTL_DATA_REG, i >> 8);
 }
 
 void term_init(void) {
@@ -64,13 +78,23 @@ void term_init(void) {
 	uint16_t c16 = vga_char(' ', COLOR_BLUE, COLOR_WHITE);
 	x = 0;
 	y = 0;
+	update_cursor();
 	for(i = 0; i < (COL * ROW); i++)
 		map_start[i] = c16;
 }
 
 void put_char(char c) {
-	map_start[y * COL + x] = vga_char(c, COLOR_BLUE, COLOR_WHITE);
-	x++;
+	switch(c) {
+	case '\n':
+		increase_x(COL);
+		break;
+	case '\t':
+		increase_x(4);
+		break;
+	default:
+		map_start[y * COL + x] = vga_char(c, COLOR_BLUE, COLOR_WHITE);
+		increase_x(1);
+	}
 	update_cursor();
 }
 

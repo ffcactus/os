@@ -10,7 +10,7 @@
  */
 void _start() {
 	term_init();
-	term_printf("Hello World!");
+	term_printf("Loading kernel...\n");
 	while(1);
 }
 
