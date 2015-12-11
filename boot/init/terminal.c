@@ -46,12 +46,11 @@ static inline void update_cursor() {
 			//scroll();
 		}
 	}
-	/*
+
 	outb(VGA_CTL_INDEX_REG, CURSOR_LOCATION_L);
 	outb(VGA_CTL_DATA_REG, x);
 	outb(VGA_CTL_INDEX_REG, CURSOR_LOCATION_H);
 	outb(VGA_CTL_DATA_REG, y);
-	*/
 }
 
 static inline uint16_t vga_char(char c, enum vga_color bg, enum vga_color fg) {
@@ -72,7 +71,7 @@ void term_init(void) {
 void put_char(char c) {
 	map_start[y * COL + x] = vga_char(c, COLOR_BLUE, COLOR_WHITE);
 	x++;
-	//update_cursor();
+	update_cursor();
 }
 
 void term_printf(const char* s) {
