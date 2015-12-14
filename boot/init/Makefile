@@ -1,7 +1,9 @@
 all:
 	i686-elf-gcc -c main.c -o main.o -std=gnu99 -ffreestanding -Wall -Wextra
 	i686-elf-gcc -c terminal.c -o terminal.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
-	i686-elf-gcc -m32 -Ttext 0x8000 -o startup.elf -ffreestanding -O2 -nostdlib main.o terminal.o -lgcc
+	i686-elf-gcc -c cpu.c -o cpu.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
+	i686-elf-gcc -c string.c -o string.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
+	i686-elf-gcc -m32 -Ttext 0x8000 -o startup.elf -ffreestanding -O2 -nostdlib main.o terminal.o cpu.o string.o -lgcc
 	objcopy -O binary --set-section-flags .bss=alloc,load,contents startup.elf startup.bin
 clean:
 	@rm -rf main.o terminal.o startup.elf startup.bin
