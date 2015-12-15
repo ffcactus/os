@@ -2,6 +2,7 @@
 #include "string.h"
 #include "cpu.h"
 
+extern inline intptr_t *memset(intptr_t *s, uint8_t c, uint32_t n);
 
 static union gdt_desc _gdt[MAX_DESCRIPTORS];
 static struct gdtr _gdtr;
@@ -10,7 +11,7 @@ static void set_gdt_desc(uint32_t i, uint64_t base, uint64_t limit,
 			 uint8_t access, uint8_t grand) {
 	if(i > MAX_DESCRIPTORS)
 		return;
-	memset((void*) &_gdt[i], 0, sizeof (union gdt_desc));
+	//memset((intptr_t*) &_gdt[i], 0, sizeof (union gdt_desc));
 	_gdt[i].group.base_low = base & 0xffff;
 	_gdt[i].group.base_mid = (base >> 16) & 0xff;
 	_gdt[i].group.base_high = (base >> 24) & 0xff;

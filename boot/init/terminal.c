@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include "terminal.h"
+#include "string.h"
 #include "port.h"
 
 #define COL	80
