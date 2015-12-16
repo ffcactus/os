@@ -4,11 +4,13 @@
  */
 #include <stdint.h>
 #include "terminal.h"
+#include "cpu.h"
 
 /**
  * Take it as main().
  */
 void _start() {
+	install_gdt();
 	term_init();
 	term_printf("Loading kernel...\n");
 	term_printf("This is %c.\nThis is dec %u,\t%d.\nThis is hex %h.\nThis is string %s.\n",

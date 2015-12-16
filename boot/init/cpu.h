@@ -57,4 +57,6 @@ struct gdtr {
 	uint32_t base;
 } __attribute__ ((packed));
 
+extern void install_gdt();
+
 #endif
