@@ -2,6 +2,7 @@
 #define CPU_H
 
 #define MAX_DESCRIPTORS (256)
+#define MAX_INTERRUPTS (256)
 
 #define GDT_ACCESS_VM_S		1
 #define GDT_ACCESS_VM_C		0
@@ -50,13 +51,33 @@ union gdt_desc {
 } __attribute__ ((packed));
 
 /**
- * The GDT
+ * The GDT table.
  */
 struct gdtr {
 	uint16_t limit;
 	uint32_t base;
 } __attribute__ ((packed));
 
+/**
+ * The interrupt descriptor.
+ */
+struct idt_desc {
+	uint16_t base_low;
+	uint16_t selector;
+	uint8_t reserved;
+	uint8_t flags;
+	uint16_t base_high;
+} __attribute__ ((packed));
+
+/**
+ * The IDT table.
+ */
+struct idtr {
+	uint16_t limit;
+	uint32_t base;
+} __attribute__ ((packed));
+
 extern void install_gdt();
+extern void install_idt();
 
 #endif

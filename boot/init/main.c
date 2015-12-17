@@ -11,6 +11,7 @@
  */
 void _start() {
 	install_gdt();
+	install_idt();
 	term_init();
 	term_printf("Loading kernel...\n");
 	term_printf("This is %c.\nThis is dec %u,\t%d.\nThis is hex %h.\nThis is string %s.\n",

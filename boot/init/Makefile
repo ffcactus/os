@@ -1,6 +1,6 @@
 CC=i686-elf-gcc
 #CFLAGS=-std=gnu99 -ffreestanding -finline-functions -Wall -Wextra
-CFLAGS=-Wall -O -finline-functions -ffreestanding
+CFLAGS=-Wall -Wextra -O -finline-functions -fomit-frame-pointer -fstrength-reduce -ffreestanding 
 
 .c.o:
 	$(CC) $(CFLAGS) -c -o $*.o $<
