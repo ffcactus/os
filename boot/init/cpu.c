@@ -7,8 +7,8 @@ extern inline intptr_t memset(intptr_t s, uint8_t c, uint32_t n);
 
 static union gdt_desc _gdt[MAX_DESCRIPTORS];
 static struct idt_desc _idt[MAX_INTERRUPTS];
-static struct gdtr _gdtr;
-static struct idtr _idtr;
+struct gdtr _gdtr;
+struct idtr _idtr;
 
 /**
  * Set a single GDT descriptor.
@@ -82,5 +82,5 @@ void install_idt() {
 	for(i = 0; i < MAX_INTERRUPTS; i++)
 		set_idt_desc(i, 0b01110001, 0x08,
 			     (intptr_t) default_int_handler);
-	__asm__ volatile ("lidt _idtr");
+	__asm__ ("lidt _idtr");
 }
