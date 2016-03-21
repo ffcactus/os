@@ -10,6 +10,7 @@ clean:
 	cd boot; make clean
 
 cd: all
+	rm -rf target/iso
 	mkdir -p target/iso/BOOT
 	cp boot/bootloader/boot.bin target/iso/BOOT/LOADER.SYS
 	cp boot/init/startup.bin target/iso/STARTUP.BIN
